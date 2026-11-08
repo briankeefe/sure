@@ -63,7 +63,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "fetches transactions data if item supports transactions and any accounts present" do
-    @plaid_item.update!(available_products: [ "transactions" ], billed_products: [])
+    @plaid_item.update!(available_products: [ "transactions" ], billed_products: [], raw_payload: { "consented_products" => [ "transactions" ] })
 
     @snapshot.expects(:accounts).returns([
       OpenStruct.new(
@@ -87,7 +87,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "does not fetch transactions if no accounts" do
-    @plaid_item.update!(available_products: [ "transactions" ], billed_products: [])
+    @plaid_item.update!(available_products: [ "transactions" ], billed_products: [], raw_payload: { "consented_products" => [ "transactions" ] })
 
     @snapshot.expects(:accounts).returns([]).at_least_once
 
@@ -99,7 +99,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "updates next_cursor when fetching transactions" do
-    @plaid_item.update!(available_products: [ "transactions" ], billed_products: [], next_cursor: "test_cursor_1")
+    @plaid_item.update!(available_products: [ "transactions" ], billed_products: [], next_cursor: "test_cursor_1", raw_payload: { "consented_products" => [ "transactions" ] })
 
     @snapshot.expects(:accounts).returns([
       OpenStruct.new(
@@ -124,7 +124,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "fetches investments data if item supports investments and investment accounts present" do
-    @plaid_item.update!(available_products: [ "investments" ], billed_products: [])
+    @plaid_item.update!(available_products: [ "investments" ], billed_products: [], raw_payload: { "consented_products" => [ "investments" ] })
 
     @snapshot.expects(:accounts).returns([
       OpenStruct.new(
@@ -141,7 +141,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "keeps securities for an investment account with holdings but no investment transactions" do
-    @plaid_item.update!(available_products: [ "investments" ], billed_products: [])
+    @plaid_item.update!(available_products: [ "investments" ], billed_products: [], raw_payload: { "consented_products" => [ "investments" ] })
     @snapshot.stubs(:accounts).returns([ OpenStruct.new(account_id: "123", type: "investment") ])
 
     security = OpenStruct.new(security_id: "sec_1", ticker_symbol: "VTI")
@@ -160,7 +160,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "has no securities for an investment account with neither holdings nor transactions" do
-    @plaid_item.update!(available_products: [ "investments" ], billed_products: [])
+    @plaid_item.update!(available_products: [ "investments" ], billed_products: [], raw_payload: { "consented_products" => [ "investments" ] })
     @snapshot.stubs(:accounts).returns([ OpenStruct.new(account_id: "123", type: "investment") ])
 
     @plaid_provider.expects(:get_item_investments).with(@plaid_item.access_token).returns(
@@ -175,7 +175,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "does not fetch investments if no investment accounts" do
-    @plaid_item.update!(available_products: [ "investments" ], billed_products: [])
+    @plaid_item.update!(available_products: [ "investments" ], billed_products: [], raw_payload: { "consented_products" => [ "investments" ] })
 
     @snapshot.expects(:accounts).returns([]).at_least_once
 
@@ -187,7 +187,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "fetches liabilities data if item supports liabilities and liabilities accounts present" do
-    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ])
+    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ], raw_payload: { "consented_products" => [ "liabilities" ] })
 
     @snapshot.expects(:accounts).returns([
       OpenStruct.new(
@@ -205,7 +205,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "does not fetch liabilities if no liabilities accounts" do
-    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ])
+    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ], raw_payload: { "consented_products" => [ "liabilities" ] })
 
     @snapshot.expects(:accounts).returns([]).at_least_once
 
@@ -272,7 +272,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "still raises other liabilities errors" do
-    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ])
+    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ], raw_payload: { "consented_products" => [ "liabilities" ] })
 
     @snapshot.expects(:accounts).returns([
       OpenStruct.new(account_id: "123", type: "credit", subtype: "credit card")
@@ -314,7 +314,7 @@ class PlaidItem::AccountsSnapshotTest < ActiveSupport::TestCase
   end
 
   test "still raises unavailable-liabilities errors once liabilities was added to the item" do
-    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ])
+    @plaid_item.update!(available_products: [], billed_products: [ "liabilities" ], raw_payload: { "consented_products" => [ "liabilities" ] })
 
     %w[PRODUCTS_NOT_SUPPORTED ACCESS_NOT_GRANTED NO_LIABILITY_ACCOUNTS].each do |error_code|
       provider = mock

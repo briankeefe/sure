@@ -6,6 +6,11 @@ class PlaidTransactionsRefreshPollJob < ApplicationJob
 
   def perform(plaid_item, cursor:, attempts_remaining: MAX_ATTEMPTS)
     plaid_item.reload
+    unless plaid_item.can_read_product?("transactions")
+      PlaidTransactionsRefreshFollowUpSyncJob.perform_later(plaid_item)
+      return
+    end
+
     cursor = plaid_item.next_cursor if plaid_item.next_cursor != cursor
 
     transactions = plaid_item.plaid_provider.get_transactions(
