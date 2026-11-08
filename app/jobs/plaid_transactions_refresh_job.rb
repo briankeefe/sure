@@ -2,6 +2,11 @@ class PlaidTransactionsRefreshJob < ApplicationJob
   queue_as :high_priority
 
   def perform(plaid_item)
+    unless plaid_item.transactions_refresh_allowed?
+      plaid_item.sync_later_with_follow_up
+      return
+    end
+
     cursor = plaid_item.next_cursor
 
     begin

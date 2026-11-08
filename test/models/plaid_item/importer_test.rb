@@ -8,6 +8,17 @@ class PlaidItem::ImporterTest < ActiveSupport::TestCase
     @importer = PlaidItem::Importer.new(@plaid_item, plaid_provider: @mock_provider)
   end
 
+  test "preserves the cursor when product policy skips transaction reads" do
+    @plaid_item.update!(next_cursor: "existing-cursor")
+    @importer.stubs(:fetch_and_import_item_data)
+    PlaidItem::AccountsSnapshot.any_instance.stubs(:accounts).returns([])
+    PlaidItem::AccountsSnapshot.any_instance.stubs(:transactions_cursor).returns(nil)
+
+    @importer.import
+
+    assert_equal "existing-cursor", @plaid_item.reload.next_cursor
+  end
+
   test "imports item metadata" do
     item_data = OpenStruct.new(
       item_id: "item_1",

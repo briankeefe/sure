@@ -84,7 +84,7 @@ class PlaidItem < ApplicationRecord
   end
 
   def request_transactions_refresh_later
-    return unless supports_product?("transactions")
+    return unless transactions_refresh_allowed?
     return unless shared_transactions_refresh_cache?
 
     refresh_requested = Rails.cache.write(
@@ -171,6 +171,17 @@ class PlaidItem < ApplicationRecord
     consented_products.include?(product)
   end
 
+  # Consent permits a read, but does not guarantee the product is already billed.
+  # Strict installations must not initialize additional per-Item products.
+  def can_read_product?(product)
+    consented_to_product?(product) &&
+      (ENV["PLAID_REQUIRE_BILLED_PRODUCTS"] != "true" || billed_products.include?(product))
+  end
+
+  def transactions_refresh_allowed?
+    Provider::Plaid.paid_transactions_refresh_enabled? && can_read_product?("transactions")
+  end
+
   private
     def transactions_refresh_cache_key
       "plaid_item:#{id}:transactions_refresh_requested"
@@ -208,29 +219,13 @@ class PlaidItem < ApplicationRecord
       end
     end
 
-    # Plaid splits an item's products across three arrays. If the item has made a
-    # request for a product, it is put in the billed_products array. If it is
-    # supported but not yet used, it goes in available_products. Products granted
-    # through Link's `additional_consented_products` appear in neither -- they are
-    # reported in consented_products until the first call actually bills them.
-    #
-    # That third array matters because it is how we request `transactions` for
-    # liability accounts: Provider::Plaid#get_primary_product returns "liabilities"
-    # for CreditCard/Loan, so `transactions` can only arrive as an additionally
-    # consented product. Omitting it made supports_product?("transactions") false
-    # for every Plaid-linked credit card, so PlaidItem::AccountsSnapshot skipped
-    # the transactions fetch entirely and those accounts imported balances and
-    # liabilities but no transactions at all.
+    # Capability metadata is distinct from permission to read a product.
     def supported_products
-      (available_products + consented_products).map(&:to_s).uniq
+      (available_products + billed_products + consented_products).map(&:to_s).uniq
     end
 
-    # Link's initial `products` are billed when the item is created; products
-    # granted through `additional_consented_products` stay in consented_products
-    # until their first call bills them.
+    # Missing consent metadata fails closed; billing is not a consent receipt.
     def consented_products
-      consented = raw_payload.is_a?(Hash) ? Array(raw_payload["consented_products"]) : []
-
-      (billed_products + consented).map(&:to_s).uniq
+      raw_payload.is_a?(Hash) ? Array(raw_payload["consented_products"]).map(&:to_s) : []
     end
 end

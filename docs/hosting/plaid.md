@@ -102,3 +102,38 @@ PLAID_ENV: ${PLAID_ENV}
 ---
 
 Once you access your Sure instance from your domain, you should now see the **Link account** option in the Sure UI.
+
+## Consent, billing, and polling policy
+
+Background imports read Transactions, Investments, and Liabilities only when the
+latest Item metadata explicitly lists the product in `consented_products`.
+Institution availability is not consent. Missing consent metadata fails closed;
+refresh the Item metadata through an ordinary sync rather than editing it.
+
+For installations reusing existing Items without authorizing additional product
+charges, set `PLAID_REQUIRE_BILLED_PRODUCTS=true` in **both web and worker**
+environments. Reads then also require the product in `billed_products`. Default
+is false: explicitly consented products may otherwise be initialized by a read.
+Strict mode can skip a newly linked, consented product that has not yet been
+billed; it does not initialize that product or change its consent metadata.
+Skipped transaction reads preserve the stored incremental cursor.
+
+Paid Transactions Refresh is **off by default**. Manual Sync all, login-triggered
+sync, scheduled sync, and per-connection sync still use ordinary polling
+(`/transactions/sync` for permitted bank Transactions). They do not force the
+institution to fetch fresh data. Previously queued refresh jobs fall back to
+ordinary sync; direct provider refresh calls raise `PaidRefreshDisabledError`.
+
+Only set `PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH=true` in both web and worker after
+explicitly accepting the separate per-request fee. Enqueue and job execution also
+require permission to read Transactions. The provider independently enforces the
+installation-wide opt-in. Do not use `transactions_refresh` membership in
+`billed_products` as fee authorization: per-call products need not appear there.
+Other sync providers and the native daily schedule are unchanged.
+
+References: [Item metadata](https://plaid.com/docs/api/items/#itemget),
+[Transactions Refresh and its separate fee model](https://plaid.com/docs/api/products/transactions/#transactionsrefresh).
+
+Deleting/disconnecting an Item still calls Plaid's `/item/remove`. When an Item
+is shared with another application, that revokes its access there too; these
+read/refresh policies do not change disconnect behavior.

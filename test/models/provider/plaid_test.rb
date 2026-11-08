@@ -154,7 +154,9 @@ class Provider::PlaidTest < ActiveSupport::TestCase
       request.access_token == "access-token"
     end
 
-    @plaid.refresh_transactions("access-token")
+    with_env_overrides("PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH" => "true") do
+      @plaid.refresh_transactions("access-token")
+    end
   end
 
   test "gets item investments" do

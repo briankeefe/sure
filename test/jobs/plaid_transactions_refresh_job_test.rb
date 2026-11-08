@@ -3,9 +3,16 @@ require "test_helper"
 class PlaidTransactionsRefreshJobTest < ActiveJob::TestCase
   setup do
     @plaid_item = plaid_items(:one)
+    @plaid_item.update!(raw_payload: { "consented_products" => @plaid_item.billed_products })
     @plaid_item.update!(next_cursor: "saved-cursor")
     @provider = mock
     PlaidItem.any_instance.stubs(:plaid_provider).returns(@provider)
+    @refresh_policy = ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"]
+    ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"] = "true"
+  end
+
+  teardown do
+    ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"] = @refresh_policy
   end
 
   test "requests refresh and schedules cursor polling" do

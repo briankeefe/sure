@@ -4,6 +4,13 @@ class Provider::Plaid
   SUPPORTED_PLAID_PRODUCTS = %w[transactions investments liabilities].freeze
   MAX_HISTORY_DAYS = Rails.env.development? ? 90 : 730
 
+  class PaidRefreshDisabledError < StandardError; end
+
+  # Refresh is billed per request, not an already-billed per-Item product.
+  def self.paid_transactions_refresh_enabled?
+    ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"] == "true"
+  end
+
   def initialize(config, region: :us)
     @client = Plaid::PlaidApi.new(
       Plaid::ApiClient.new(config)
@@ -120,6 +127,10 @@ class Provider::Plaid
   end
 
   def refresh_transactions(access_token)
+    unless self.class.paid_transactions_refresh_enabled?
+      raise PaidRefreshDisabledError, "Paid Plaid Transactions Refresh is disabled; use ordinary sync polling"
+    end
+
     request = Plaid::TransactionsRefreshRequest.new(access_token: access_token)
     client.transactions_refresh(request)
   end

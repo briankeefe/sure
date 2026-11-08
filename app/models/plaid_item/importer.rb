@@ -66,7 +66,8 @@ class PlaidItem::Importer
         clear_liabilities_of_omitted_accounts(snapshot)
 
         # Once we know all data has been imported, save the cursor to avoid re-fetching the same data next time
-        plaid_item.update!(next_cursor: snapshot.transactions_cursor)
+        cursor = snapshot.transactions_cursor
+        plaid_item.update!(next_cursor: cursor) if cursor
       end
     end
 end

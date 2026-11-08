@@ -87,7 +87,7 @@ class PlaidItem::AccountsSnapshot
     end
 
     def can_fetch_transactions?
-      plaid_item.supports_product?("transactions") && accounts.any?
+      plaid_item.can_read_product?("transactions") && accounts.any?
     end
 
     def transactions_data
@@ -100,7 +100,7 @@ class PlaidItem::AccountsSnapshot
     end
 
     def can_fetch_investments?
-      plaid_item.supports_product?("investments") &&
+      plaid_item.can_read_product?("investments") &&
       accounts.any? { |a| a.type == "investment" }
     end
 
@@ -110,7 +110,7 @@ class PlaidItem::AccountsSnapshot
     end
 
     def can_fetch_liabilities?
-      plaid_item.consented_to_product?("liabilities") &&
+      plaid_item.can_read_product?("liabilities") &&
       accounts.any? do |a|
         # Plaid's `credit` type has two subtypes: "credit card" and "paypal".
         # Liabilities covers both, so match on the type rather than allow-listing

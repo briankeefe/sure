@@ -5,8 +5,15 @@ class PlaidItemTest < ActiveSupport::TestCase
 
   setup do
     @plaid_item = @syncable = plaid_items(:one)
+    @plaid_item.update!(raw_payload: { "consented_products" => @plaid_item.billed_products })
     @plaid_provider = mock
     Provider::Registry.stubs(:plaid_provider_for_region).returns(@plaid_provider)
+    @refresh_policy = ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"]
+    ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"] = "true"
+  end
+
+  teardown do
+    ENV["PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH"] = @refresh_policy
   end
 
   test "supports products granted through additional_consented_products" do
@@ -166,7 +173,7 @@ class PlaidItemTest < ActiveSupport::TestCase
   end
 
   test "user sync does not request refresh without the transactions product" do
-    @plaid_item.update!(billed_products: [ "investments" ])
+    @plaid_item.update!(billed_products: [ "investments" ], raw_payload: { "consented_products" => [ "investments" ] })
 
     Rails.cache.expects(:write).never
     assert_no_enqueued_jobs only: PlaidTransactionsRefreshJob do
@@ -209,12 +216,5 @@ class PlaidItemTest < ActiveSupport::TestCase
     assert_raises RedisClient::Error do
       @plaid_item.request_transactions_refresh_later
     end
-  end
-
-  test "user sync preserves follow-up sync while requesting provider refresh" do
-    @plaid_item.expects(:request_transactions_refresh_later).once
-    @plaid_item.expects(:sync_later_with_follow_up).once
-
-    @plaid_item.sync_later_with_provider_refresh
   end
 end
