@@ -123,6 +123,8 @@ sync, scheduled sync, and per-connection sync still use ordinary polling
 (`/transactions/sync` for permitted bank Transactions). They do not force the
 institution to fetch fresh data. Previously queued refresh jobs fall back to
 ordinary sync; direct provider refresh calls raise `PaidRefreshDisabledError`.
+Queued transaction-delta polls recheck read permission after reloading Item
+metadata; disallowed polls schedule an ordinary sync without a Transactions call.
 
 Only set `PLAID_ALLOW_PAID_TRANSACTIONS_REFRESH=true` in both web and worker after
 explicitly accepting the separate per-request fee. Enqueue and job execution also

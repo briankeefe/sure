@@ -3,9 +3,36 @@ require "test_helper"
 class PlaidTransactionsRefreshPollJobTest < ActiveJob::TestCase
   setup do
     @plaid_item = plaid_items(:one)
-    @plaid_item.update!(next_cursor: "saved-cursor")
+    @plaid_item.update!(
+      next_cursor: "saved-cursor",
+      billed_products: [ "transactions" ],
+      raw_payload: { "consented_products" => [ "transactions" ] }
+    )
     @provider = mock
     PlaidItem.any_instance.stubs(:plaid_provider).returns(@provider)
+  end
+
+  test "queued poll skips investment-only items and schedules a safe follow-up" do
+    assert_disallowed_queued_poll(
+      billed_products: [ "investments" ],
+      available_products: [ "transactions" ],
+      raw_payload: { "consented_products" => [ "investments" ] }
+    )
+  end
+
+  test "queued poll skips consented but unbilled transactions in strict mode" do
+    assert_disallowed_queued_poll(
+      billed_products: [],
+      raw_payload: { "consented_products" => [ "transactions" ] }
+    )
+  end
+
+  test "queued poll reloads revoked consent before dispatch" do
+    assert_disallowed_queued_poll(raw_payload: { "consented_products" => [] })
+  end
+
+  test "queued poll skips missing consent metadata" do
+    assert_disallowed_queued_poll(raw_payload: nil)
   end
 
   test "continues polling from a cursor advanced by a concurrent sync" do
@@ -26,8 +53,12 @@ class PlaidTransactionsRefreshPollJobTest < ActiveJob::TestCase
       .with(@plaid_item.access_token, next_cursor: "saved-cursor")
       .returns(stub(cursor: "advanced-cursor"))
 
-    assert_enqueued_with(job: PlaidTransactionsRefreshFollowUpSyncJob) do
-      PlaidTransactionsRefreshPollJob.perform_now(@plaid_item, cursor: "saved-cursor")
+    with_env_overrides("PLAID_REQUIRE_BILLED_PRODUCTS" => "true") do
+      assert_enqueued_with(job: PlaidTransactionsRefreshFollowUpSyncJob) do
+        perform_enqueued_jobs(only: PlaidTransactionsRefreshPollJob) do
+          PlaidTransactionsRefreshPollJob.perform_later(@plaid_item, cursor: "saved-cursor")
+        end
+      end
     end
   end
 
@@ -69,4 +100,21 @@ class PlaidTransactionsRefreshPollJobTest < ActiveJob::TestCase
       end
     end
   end
+
+  private
+    def assert_disallowed_queued_poll(changes)
+      with_env_overrides("PLAID_REQUIRE_BILLED_PRODUCTS" => "true") do
+        @provider.expects(:get_transactions).never
+        assert_enqueued_with(job: PlaidTransactionsRefreshFollowUpSyncJob) do
+          assert_no_difference "DebugLogEntry.count" do
+            PlaidTransactionsRefreshPollJob.perform_later(@plaid_item, cursor: "saved-cursor", attempts_remaining: 2)
+            # The queued object had permission; execution must use fresh metadata.
+            PlaidItem.find(@plaid_item.id).update!(changes)
+            perform_enqueued_jobs(only: PlaidTransactionsRefreshPollJob)
+          end
+        end
+        assert_equal "saved-cursor", @plaid_item.reload.next_cursor
+        assert_no_enqueued_jobs only: PlaidTransactionsRefreshPollJob
+      end
+    end
 end
